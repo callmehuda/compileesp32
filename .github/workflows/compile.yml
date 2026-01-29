@@ -41,7 +41,7 @@ jobs:
             0x10000 ./build/*.ino.bin
 
       - name: Upload Single Binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ESP32-Full-Binary
           path: ./build/fullmerged.bin
