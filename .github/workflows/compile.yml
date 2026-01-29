@@ -39,6 +39,7 @@ jobs:
             0x1000 ./build/*.bootloader.bin \
             0x8000 ./build/*.partitions.bin \
             0x10000 ./build/*.ino.bin
+          ls build
 
       - name: Upload Single Binary
         uses: actions/upload-artifact@v4
