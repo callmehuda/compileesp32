@@ -2,61 +2,79 @@
 #include <WebServer.h>
 #include <Update.h>
 
-const char* ssid = "TP-Link";
-const char* password = "";
+// Konfigurasi Nama WiFi dan Password yang akan dibuat oleh ESP32
+const char* ssid_ap = "My";
+const char* password_ap = "12345678"; // Minimal 8 karakter
 
 WebServer server(80);
+unsigned long previousMillis = 0;
+const long interval = 1000; 
+bool ledState = LOW;
 
 const char INDEX_HTML[] PROGMEM = R"HTML(
 <!DOCTYPE html>
 <html>
+  <head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
   <body>
-    <h3>ESP32 Web Update</h3>
+    <h3>ESP32 Access Point Update</h3>
     <form method="POST" action="/update" enctype="multipart/form-data">
-      <input type="file" name="update" />
-      <input type="submit" value="Update" />
+      <input type="file" name="update" accept=".bin" />
+      <input type="submit" value="Upload & Update" />
     </form>
   </body>
 </html>
 )HTML";
 
 void setup() {
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); }
-
   Serial.begin(115200);
-  Serial.println(WiFi.localIP());
+  pinMode(2, OUTPUT);
+
+  // Mengubah mode menjadi Access Point
+  WiFi.softAP(ssid_ap, password_ap);
+
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("AP IP address: ");
+  Serial.println(IP); // Biasanya 192.168.4.1
 
   server.on("/", HTTP_GET, []() {
     server.send(200, "text/html", INDEX_HTML);
   });
+
   server.on("/update", HTTP_POST, []() {
     bool ok = !Update.hasError();
-    server.send(200, "text/plain", ok ? "OK" : "FAIL");
-    delay(100);
+    server.send(200, "text/plain", ok ? "Update Berhasil! Restarting..." : "Update Gagal!");
+    delay(500);
     if (ok) ESP.restart();
   }, []() {
     HTTPUpload& upload = server.upload();
     if (upload.status == UPLOAD_FILE_START) {
-      Update.begin(UPDATE_SIZE_UNKNOWN);
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+        Update.printError(Serial);
+      }
     } else if (upload.status == UPLOAD_FILE_WRITE) {
-      Update.write(upload.buf, upload.currentSize);
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+        Update.printError(Serial);
+      }
     } else if (upload.status == UPLOAD_FILE_END) {
-      Update.end(true);
+      if (Update.end(true)) {
+        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+      } else {
+        Update.printError(Serial);
+      }
     }
   });
   
   server.begin();
-pinMode(2, OUTPUT);
-
 }
 
 void loop() {
   server.handleClient();
 
-  digitalWrite(2, HIGH);  // turn the LED on (HIGH is the voltage level)
-  delay(1000);                      // wait for a second
-  digitalWrite(2, LOW);   // turn the LED off by making the voltage LOW
-  delay(1000);                      // wait for a second
-
+  // Blink LED tanpa delay agar web server tetap responsif
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    ledState = !ledState;
+    digitalWrite(2, ledState);
+  }
 }
