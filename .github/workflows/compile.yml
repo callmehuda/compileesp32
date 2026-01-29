@@ -31,11 +31,11 @@ jobs:
       - name: Merge Binaries into One
         run: |
           # Perintah ini menggabungkan bootloader, partition table, dan app menjadi satu file di offset 0x0
-          python -m esptool --chip esp32 merge_bin \
+          python -m esptool --chip esp32 merge-bin \
             -o ./build/fullmerged.bin \
-            --flash_mode dio \
-            --flash_freq 40m \
-            --flash_size 4MB \
+            --flash-mode dio \
+            --flash-freq 40m \
+            --flash-size 4MB \
             0x1000 ./build/*.bootloader.bin \
             0x8000 ./build/*.partitions.bin \
             0x10000 ./build/*.ino.bin
