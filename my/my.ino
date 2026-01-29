@@ -2,8 +2,8 @@
 #include <WebServer.h>
 
 // --- KONFIGURASI WIFI (Mode Access Point) ---
-const char* ssid = "ESP32-Tombol";
-const char* password = "password123";
+const char* ssid = "My";
+const char* password = "llllllll";
 
 WebServer server(80);
 const int ledPin = 2; // LED bawaan ESP32 DevKitC V4
