@@ -39,14 +39,21 @@ setInterval(tick,500);tick();
 )html";
 
 void setup() {
+  Serial.begin(19200);
   pinMode(TRIG, OUTPUT);
   pinMode(ECHO, INPUT);
-  WiFi.softAP(SSID, PASS);
+
+  bool ok = WiFi.softAP(SSID, PASS);
+  Serial.println(ok ? "AP started" : "AP FAILED");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.softAPIP());
+
   server.on("/", []() { server.send(200, "text/html", PAGE); });
   server.on("/d", []() {
     server.send(200, "application/json", "{\"jarak\":" + String(jarak(), 1) + "}");
   });
   server.begin();
+  Serial.println("HTTP server started");
 }
 
 void loop() {
