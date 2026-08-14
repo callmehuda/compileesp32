@@ -1,49 +1,60 @@
 #include <BleKeyboard.h>
 
-BleKeyboard bleKeyboard("ESP32 WASD", "DIY", 100);
+BleKeyboard bleKeyboard("Nigger", "ESP32", 100);
 
-constexpr uint8_t touchPins[4] = {T0, T2, T3, T4};
-constexpr char keys[4] = {'w', 'a', 's', 'd'};
-constexpr int TOUCH_MARGIN = 8;
-constexpr unsigned long PRESS_DEBOUNCE_US = 2000;
-constexpr unsigned long RELEASE_DEBOUNCE_US = 20000;
-constexpr int CALIBRATION_SAMPLES = 32;
+constexpr uint8_t PIN_COUNT = 4;
+constexpr uint8_t TOUCH_PINS[PIN_COUNT] = {T7, T6, T5, T4};
+constexpr uint8_t KEY_MAP[PIN_COUNT] = {'d', 'f', 'j', 'k'};
+constexpr uint16_t CALIB_SAMPLES = 200;
+constexpr float TOUCH_RATIO = 0.85f;
+constexpr uint8_t CONFIRM_COUNT = 2;
 
-int baseline[4];
-bool rawState[4] = {};
-bool pressed[4] = {};
-unsigned long lastRawChange[4] = {};
+uint16_t baseline[PIN_COUNT];
+uint16_t threshold[PIN_COUNT];
+bool pressed[PIN_COUNT] = {false};
+uint8_t confirmCounter[PIN_COUNT] = {0};
 
 void calibrate() {
-  for (int i = 0; i < 4; i++) {
-    long sum = 0;
-    for (int s = 0; s < CALIBRATION_SAMPLES; s++) sum += touchRead(touchPins[i]);
-    baseline[i] = sum / CALIBRATION_SAMPLES;
+  uint32_t sums[PIN_COUNT] = {0};
+  for (uint16_t i = 0; i < CALIB_SAMPLES; i++) {
+    for (uint8_t p = 0; p < PIN_COUNT; p++) {
+      sums[p] += touchRead(TOUCH_PINS[p]);
+    }
+  }
+  for (uint8_t p = 0; p < PIN_COUNT; p++) {
+    baseline[p] = sums[p] / CALIB_SAMPLES;
+    threshold[p] = baseline[p] * TOUCH_RATIO;
   }
 }
 
 void setup() {
-  calibrate();
   bleKeyboard.begin();
+  calibrate();
 }
 
 void loop() {
-  if (!bleKeyboard.isConnected()) return;
+  if (!bleKeyboard.isConnected()) {
+    delay(50);
+    return;
+  }
 
-  unsigned long now = micros();
+  for (uint8_t p = 0; p < PIN_COUNT; p++) {
+    uint16_t val = touchRead(TOUCH_PINS[p]);
+    bool touching = val < threshold[p];
 
-  for (int i = 0; i < 4; i++) {
-    bool touched = touchRead(touchPins[i]) < baseline[i] - TOUCH_MARGIN;
-
-    if (touched != rawState[i]) {
-      rawState[i] = touched;
-      lastRawChange[i] = now;
-    }
-
-    unsigned long debounce = rawState[i] ? PRESS_DEBOUNCE_US : RELEASE_DEBOUNCE_US;
-    if (rawState[i] != pressed[i] && now - lastRawChange[i] > debounce) {
-      pressed[i] = rawState[i];
-      pressed[i] ? bleKeyboard.press(keys[i]) : bleKeyboard.release(keys[i]);
+    if (touching != pressed[p]) {
+      confirmCounter[p]++;
+      if (confirmCounter[p] >= CONFIRM_COUNT) {
+        pressed[p] = touching;
+        confirmCounter[p] = 0;
+        if (pressed[p]) {
+          bleKeyboard.press(KEY_MAP[p]);
+        } else {
+          bleKeyboard.release(KEY_MAP[p]);
+        }
+      }
+    } else {
+      confirmCounter[p] = 0;
     }
   }
 }
