@@ -11,6 +11,8 @@ bool pressed[4] = {false, false, false, false};
 unsigned long lastChange[4] = {0, 0, 0, 0};
 
 void setup() {
+  Serial.begin(115200);
+  Serial.println("boot ok");
   bleKeyboard.begin();
 }
 
