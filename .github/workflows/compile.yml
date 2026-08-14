@@ -59,6 +59,12 @@ jobs:
           echo "partitions=$PARTITIONS" >> "$GITHUB_OUTPUT"
           echo "app=$APP" >> "$GITHUB_OUTPUT"
 
+      - name: Verify component binaries before merge
+        run: |
+          python -m esptool --chip esp32 image-info "${{ steps.paths.outputs.bootloader }}"
+          python -m esptool --chip esp32 image-info "${{ steps.paths.outputs.app }}"
+          ls -la "${{ steps.paths.outputs.bootloader }}" "${{ steps.paths.outputs.partitions }}" "${{ steps.paths.outputs.app }}"
+
       - name: Merge Binaries into One
         run: |
           python -m esptool --chip esp32 merge-bin \
@@ -72,8 +78,11 @@ jobs:
 
       - name: Verify merged binary
         run: |
-          python -m esptool --chip esp32 image_info ./build/fullmerged.bin
           ls -la ./build
+          echo "byte di offset 0x10000 (app magic, harus e9):"
+          dd if=./build/fullmerged.bin bs=1 skip=$((0x10000)) count=1 2>/dev/null | xxd
+          echo "byte di offset 0x1000 (bootloader magic, harus e9):"
+          dd if=./build/fullmerged.bin bs=1 skip=$((0x1000)) count=1 2>/dev/null | xxd
 
       - name: Upload Single Binary
         uses: actions/upload-artifact@v4
