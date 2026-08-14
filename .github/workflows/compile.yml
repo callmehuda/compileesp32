@@ -22,30 +22,61 @@ jobs:
           arduino-cli config set board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
-      - name: Install Libraries
-        run: |
-          arduino-cli lib install "ESP32 BLE Keyboard"
 
-      - name: Compile & Export Binaries
+      - name: Install Libraries
+        run: arduino-cli lib install "ESP32 BLE Keyboard"
+
+      - name: Compile
         run: |
-          # Pastikan path folder/file .ino sudah benar
-          arduino-cli compile --fqbn esp32:esp32:esp32 --build-property "build.partitions=default" --output-dir ./build ./my/my.ino
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32:PartitionScheme=default \
+            --output-dir ./build \
+            ./my/my.ino
+
+      - name: List build output
+        run: ls -la ./build
+
+      - name: Resolve binary paths
+        id: paths
+        run: |
+          BOOTLOADER=$(find ./build -maxdepth 1 -name "*.bootloader.bin")
+          PARTITIONS=$(find ./build -maxdepth 1 -name "*.partitions.bin")
+          APP=$(find ./build -maxdepth 1 -name "*.ino.bin")
+
+          for f in "$BOOTLOADER" "$PARTITIONS" "$APP"; do
+            if [ -z "$f" ]; then
+              echo "ERROR: satu atau lebih file binary tidak ditemukan"
+              exit 1
+            fi
+            count=$(echo "$f" | wc -l)
+            if [ "$count" -ne 1 ]; then
+              echo "ERROR: pattern cocok lebih dari satu file, tidak unik: $f"
+              exit 1
+            fi
+          done
+
+          echo "bootloader=$BOOTLOADER" >> "$GITHUB_OUTPUT"
+          echo "partitions=$PARTITIONS" >> "$GITHUB_OUTPUT"
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
 
       - name: Merge Binaries into One
         run: |
-          # Perintah ini menggabungkan bootloader, partition table, dan app menjadi satu file di offset 0x0
           python -m esptool --chip esp32 merge-bin \
             -o ./build/fullmerged.bin \
             --flash-mode dio \
             --flash-freq 40m \
             --flash-size 4MB \
-            0x1000 ./build/*.bootloader.bin \
-            0x8000 ./build/*.partitions.bin \
-            0x10000 ./build/*.ino.bin
-          ls build
+            0x1000 "${{ steps.paths.outputs.bootloader }}" \
+            0x8000 "${{ steps.paths.outputs.partitions }}" \
+            0x10000 "${{ steps.paths.outputs.app }}"
+
+      - name: Verify merged binary
+        run: |
+          python -m esptool --chip esp32 image_info ./build/fullmerged.bin
+          ls -la ./build
 
       - name: Upload Single Binary
         uses: actions/upload-artifact@v4
         with:
           name: ESP32-Full-Binary
-          path: ./build/*merged.bin
+          path: ./build/fullmerged.bin
