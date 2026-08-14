@@ -8,7 +8,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Arduino CLI & Python
         run: |
@@ -33,59 +33,8 @@ jobs:
             --output-dir ./build \
             ./my/my.ino
 
-      - name: List build output
-        run: ls -la ./build
-
-      - name: Resolve binary paths
-        id: paths
-        run: |
-          BOOTLOADER=$(find ./build -maxdepth 1 -name "*.bootloader.bin")
-          PARTITIONS=$(find ./build -maxdepth 1 -name "*.partitions.bin")
-          APP=$(find ./build -maxdepth 1 -name "*.ino.bin")
-
-          for f in "$BOOTLOADER" "$PARTITIONS" "$APP"; do
-            if [ -z "$f" ]; then
-              echo "ERROR: satu atau lebih file binary tidak ditemukan"
-              exit 1
-            fi
-            count=$(echo "$f" | wc -l)
-            if [ "$count" -ne 1 ]; then
-              echo "ERROR: pattern cocok lebih dari satu file, tidak unik: $f"
-              exit 1
-            fi
-          done
-
-          echo "bootloader=$BOOTLOADER" >> "$GITHUB_OUTPUT"
-          echo "partitions=$PARTITIONS" >> "$GITHUB_OUTPUT"
-          echo "app=$APP" >> "$GITHUB_OUTPUT"
-
-      - name: Verify component binaries before merge
-        run: |
-          python -m esptool --chip esp32 image-info "${{ steps.paths.outputs.bootloader }}"
-          python -m esptool --chip esp32 image-info "${{ steps.paths.outputs.app }}"
-          ls -la "${{ steps.paths.outputs.bootloader }}" "${{ steps.paths.outputs.partitions }}" "${{ steps.paths.outputs.app }}"
-
-      - name: Merge Binaries into One
-        run: |
-          python -m esptool --chip esp32 merge-bin \
-            -o ./build/fullmerged.bin \
-            --flash-mode dio \
-            --flash-freq 40m \
-            --flash-size 4MB \
-            0x1000 "${{ steps.paths.outputs.bootloader }}" \
-            0x8000 "${{ steps.paths.outputs.partitions }}" \
-            0x10000 "${{ steps.paths.outputs.app }}"
-
-      - name: Verify merged binary
-        run: |
-          ls -la ./build
-          echo "byte di offset 0x10000 (app magic, harus e9):"
-          dd if=./build/fullmerged.bin bs=1 skip=$((0x10000)) count=1 2>/dev/null | xxd
-          echo "byte di offset 0x1000 (bootloader magic, harus e9):"
-          dd if=./build/fullmerged.bin bs=1 skip=$((0x1000)) count=1 2>/dev/null | xxd
-
       - name: Upload Single Binary
         uses: actions/upload-artifact@v4
         with:
           name: ESP32-Full-Binary
-          path: ./build/fullmerged.bin
+          path: ./build/my.ino.bin
