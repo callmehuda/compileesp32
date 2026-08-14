@@ -4,30 +4,46 @@ BleKeyboard bleKeyboard("ESP32 WASD", "DIY", 100);
 
 constexpr uint8_t touchPins[4] = {T0, T2, T3, T4};
 constexpr char keys[4] = {'w', 'a', 's', 'd'};
-constexpr int THRESHOLD = 30;
-constexpr unsigned long DEBOUNCE_MS = 150;
+constexpr int TOUCH_MARGIN = 8;
+constexpr unsigned long PRESS_DEBOUNCE_US = 2000;
+constexpr unsigned long RELEASE_DEBOUNCE_US = 20000;
+constexpr int CALIBRATION_SAMPLES = 32;
 
-bool pressed[4] = {false, false, false, false};
-unsigned long lastChange[4] = {0, 0, 0, 0};
+int baseline[4];
+bool rawState[4] = {};
+bool pressed[4] = {};
+unsigned long lastRawChange[4] = {};
+
+void calibrate() {
+  for (int i = 0; i < 4; i++) {
+    long sum = 0;
+    for (int s = 0; s < CALIBRATION_SAMPLES; s++) sum += touchRead(touchPins[i]);
+    baseline[i] = sum / CALIBRATION_SAMPLES;
+  }
+}
 
 void setup() {
-  Serial.begin(115200);
-  Serial.println("boot ok");
+  calibrate();
   bleKeyboard.begin();
 }
 
 void loop() {
   if (!bleKeyboard.isConnected()) return;
 
-  unsigned long now = millis();
+  unsigned long now = micros();
 
   for (int i = 0; i < 4; i++) {
-    bool touched = touchRead(touchPins[i]) < THRESHOLD;
+    bool touched = touchRead(touchPins[i]) < baseline[i] - TOUCH_MARGIN;
 
-    if (touched != pressed[i] && now - lastChange[i] > DEBOUNCE_MS) {
-      pressed[i] = touched;
-      lastChange[i] = now;
-      touched ? bleKeyboard.press(keys[i]) : bleKeyboard.release(keys[i]);
+    if (touched != rawState[i]) {
+      rawState[i] = touched;
+      lastRawChange[i] = now;
+    }
+
+    unsigned long debounce = rawState[i] ? PRESS_DEBOUNCE_US : RELEASE_DEBOUNCE_US;
+    if (rawState[i] != pressed[i] && now - lastRawChange[i] > debounce) {
+      pressed[i] = rawState[i];
+      pressed[i] ? bleKeyboard.press(keys[i]) : bleKeyboard.release(keys[i]);
     }
   }
 }
